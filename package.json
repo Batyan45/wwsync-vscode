@@ -4,6 +4,10 @@
     "description": "Sync files with remote servers via rsync",
     "version": "0.0.1",
     "publisher": "wwsync",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Batyan45/wwsync-vscode"
+    },
     "engines": {
         "vscode": "^1.74.0"
     },
