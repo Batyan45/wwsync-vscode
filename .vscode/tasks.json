@@ -1,0 +1,112 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "watch",
+            "dependsOn": [
+                "npm: watch"
+            ],
+            "presentation": {
+                "reveal": "never"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "type": "npm",
+            "script": "watch",
+            "group": "build",
+            "problemMatcher": "$tsc-watch",
+            "isBackground": true,
+            "label": "npm: watch",
+            "presentation": {
+                "group": "watch",
+                "reveal": "never"
+            }
+        },
+        {
+            "label": "compile",
+            "type": "npm",
+            "script": "compile",
+            "group": "build",
+            "presentation": {
+                "reveal": "silent"
+            },
+            "problemMatcher": [
+                "$tsc"
+            ]
+        },
+        {
+            "label": "VSCODE publish",
+            "type": "shell",
+            "command": "npm run version ${input:versionType} && git add . && git commit -m \"Release v$(node -p \"require('./package.json').version\")\" && git tag v$(node -p \"require('./package.json').version\") && git push && git push --tags && vsce publish",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "VSCODE publish marketplace",
+            "type": "shell",
+            "command": "vsce publish",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "VSCODE build",
+            "type": "shell",
+            "command": "vsce package",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Open VSX publish",
+            "type": "shell",
+            "command": "npx --yes ovsx publish -p ${input:openVsxToken}",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Tests",
+            "type": "npm",
+            "script": "test",
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        }
+    ],
+    "inputs": [
+        {
+            "id": "versionType",
+            "type": "pickString",
+            "description": "Version type to bump",
+            "options": [
+                "patch",
+                "minor",
+                "major"
+            ],
+            "default": "patch"
+        },
+        {
+            "id": "openVsxToken",
+            "type": "promptString",
+            "description": "Open VSX access token (OVSX_PAT)",
+            "password": true
+        }
+    ]
+}

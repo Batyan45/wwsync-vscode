@@ -1,0 +1,68 @@
+{
+    "name": "wwsync",
+    "displayName": "WWSync",
+    "description": "Sync files with remote servers via rsync",
+    "version": "0.0.1",
+    "publisher": "wwsync",
+    "engines": {
+        "vscode": "^1.74.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+        "onStartupFinished"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "wwsync.safeSync",
+                "title": "WWSync: Safe Sync",
+                "icon": "$(cloud-upload)"
+            },
+            {
+                "command": "wwsync.fullSync",
+                "title": "WWSync: Full Sync",
+                "icon": "$(sync)"
+            },
+            {
+                "command": "wwsync.run",
+                "title": "WWSync: Run Remote Session",
+                "icon": "$(terminal)"
+            }
+        ],
+        "menus": {
+            "editor/title": [
+                {
+                    "command": "wwsync.safeSync",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "wwsync.fullSync",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "wwsync.run",
+                    "group": "navigation@3"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "lint": "eslint src --ext ts",
+        "build-vsix": "vsce package",
+        "version": "npm version --no-git-tag-version"
+    },
+    "devDependencies": {
+        "@types/node": "^18.0.0",
+        "@types/vscode": "^1.74.0",
+        "@typescript-eslint/eslint-plugin": "^6.0.0",
+        "@typescript-eslint/parser": "^6.0.0",
+        "eslint": "^8.0.0",
+        "typescript": "^5.0.0"
+    }
+}
