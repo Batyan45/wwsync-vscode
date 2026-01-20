@@ -3,7 +3,7 @@
     "displayName": "WWSync",
     "description": "Sync files with remote servers via rsync",
     "version": "0.0.1",
-    "publisher": "wwsync",
+    "publisher": "batyan-soft",
     "repository": {
         "type": "git",
         "url": "https://github.com/Batyan45/wwsync-vscode"
