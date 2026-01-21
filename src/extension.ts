@@ -6,14 +6,20 @@ import { loadConfig, saveConfig, WWConfig, ServerConfig, Mapping } from './confi
 import { selectServer, selectOrCreateMapping } from './serverSelector';
 import { runSafeSync, runFullSync } from './rsync';
 import { runRemoteSession } from './run';
+import { SessionState } from './sessionState';
+import { WWSyncStatusBar } from './statusBar';
 
 // Session-based server selection storage
-const sessionServerChoice: Map<string, string> = new Map();
+const sessionState = new SessionState();
+let statusBar: WWSyncStatusBar;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('WWSync extension activated');
 
     const outputChannel = vscode.window.createOutputChannel('WWSync');
+
+    // Initialize Status Bar
+    statusBar = new WWSyncStatusBar(context, sessionState);
 
     // Safe Sync command
     const safeSyncCmd = vscode.commands.registerCommand('wwsync.safeSync', async () => {
@@ -30,7 +36,12 @@ export function activate(context: vscode.ExtensionContext) {
         await executeRun(outputChannel);
     });
 
-    context.subscriptions.push(safeSyncCmd, fullSyncCmd, runCmd, outputChannel);
+    // Show Menu command
+    const showMenuCmd = vscode.commands.registerCommand('wwsync.showMenu', async () => {
+        await statusBar.showMenu();
+    });
+
+    context.subscriptions.push(safeSyncCmd, fullSyncCmd, runCmd, showMenuCmd, outputChannel);
 }
 
 async function getCurrentWorkspaceFolder(): Promise<string | undefined> {
@@ -67,7 +78,7 @@ async function executeSync(outputChannel: vscode.OutputChannel, fullSync: boolea
         let config = loadConfig();
 
         // Select or create server
-        const serverResult = await selectServer(config, currentPath, sessionServerChoice);
+        const serverResult = await selectServer(config, currentPath, sessionState);
         if (!serverResult) {
             return; // User cancelled
         }
@@ -75,6 +86,20 @@ async function executeSync(outputChannel: vscode.OutputChannel, fullSync: boolea
         config = serverResult.config;
         const serverAlias = serverResult.serverAlias;
         const serverConfig = config.servers[serverAlias];
+
+        // Ensure session state is updated if it was a new selection (selectServer handles this for interactions but good to be safe)
+        // actually selectServer handles it if "Remember" is clicked, but if we have a single server or auto-picked, we might want to ensure status bar knows?
+        // selectServer updates sessionState if user says "Remember". 
+        // If we just picked one for this run, maybe we should also update session state lightly? 
+        // Request says "uses one and the same remembered states".
+        // Let's assume selectServer logic is sufficient.
+
+        // If the user selected a server in the flow, updating the status bar to reflect that "active" server 
+        // for the current action might be nice, but the requirement is "Default server in this directory... remembered state".
+        // So update only if we want to "remember" it. 
+        // If the user selected "Remember for this session", selectServer called sessionState.set().
+
+        // However, if we simply executed a command, the status bar might still show "WWSync" if no default is set. This is fine.
 
         // Select or create mapping
         const mappingResult = await selectOrCreateMapping(config, serverAlias, currentPath);
@@ -108,7 +133,7 @@ async function executeRun(outputChannel: vscode.OutputChannel) {
         let config = loadConfig();
 
         // Select or create server
-        const serverResult = await selectServer(config, currentPath, sessionServerChoice);
+        const serverResult = await selectServer(config, currentPath, sessionState);
         if (!serverResult) {
             return;
         }

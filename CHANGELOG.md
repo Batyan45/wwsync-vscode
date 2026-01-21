@@ -2,6 +2,14 @@
 
 All notable changes to the "WWSync" extension will be documented in this file.
 
+
+## [0.1.0] - 2026-01-21
+
+### Added
+- **Status Bar Integration**: New status bar item showing current server.
+- **Quick Menu**: Click status bar to access sync actions and switch servers.
+- **Session Memory**: Server selections are remembered per-folder execution.
+
 ## [0.0.3] - 2026-01-21
 
 ### Added

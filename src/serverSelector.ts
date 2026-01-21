@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { WWConfig, Mapping, saveConfig } from './config';
+import { SessionState } from './sessionState';
 
 interface ServerSelectionResult {
     config: WWConfig;
@@ -16,7 +17,7 @@ function normalizePath(p: string): string {
     return path.normalize(p).toLowerCase();
 }
 
-function findServersForPath(config: WWConfig, localPath: string): string[] {
+export function findServersForPath(config: WWConfig, localPath: string): string[] {
     const normalizedPath = normalizePath(localPath);
     const matches: string[] = [];
 
@@ -34,7 +35,7 @@ function findServersForPath(config: WWConfig, localPath: string): string[] {
 export async function selectServer(
     config: WWConfig,
     currentPath: string,
-    sessionCache: Map<string, string>
+    sessionState: SessionState
 ): Promise<ServerSelectionResult | undefined> {
 
     const serverNames = Object.keys(config.servers);
@@ -45,7 +46,7 @@ export async function selectServer(
     }
 
     // Check session cache first
-    const cachedServer = sessionCache.get(currentPath);
+    const cachedServer = sessionState.get(currentPath);
     if (cachedServer && config.servers[cachedServer]) {
         return { config, serverAlias: cachedServer };
     }
@@ -88,7 +89,7 @@ export async function selectServer(
         );
 
         if (remember?.label === 'Yes') {
-            sessionCache.set(currentPath, picked.label);
+            sessionState.set(currentPath, picked.label);
         }
 
         return { config, serverAlias: picked.label };

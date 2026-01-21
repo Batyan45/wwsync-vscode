@@ -20,6 +20,21 @@
     ],
     "main": "./out/extension.js",
     "contributes": {
+        "configuration": {
+            "title": "WWSync",
+            "properties": {
+                "wwsync.showButtons": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Show WWSync buttons in the editor title bar."
+                },
+                "wwsync.showStatusBar": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Show WWSync status bar item."
+                }
+            }
+        },
         "commands": [
             {
                 "command": "wwsync.safeSync",
@@ -35,21 +50,28 @@
                 "command": "wwsync.run",
                 "title": "WWSync: Run Remote Session",
                 "icon": "$(terminal)"
+            },
+            {
+                "command": "wwsync.showMenu",
+                "title": "WWSync: Show Menu"
             }
         ],
         "menus": {
             "editor/title": [
                 {
                     "command": "wwsync.safeSync",
-                    "group": "navigation@1"
+                    "group": "navigation@1",
+                    "when": "config.wwsync.showButtons"
                 },
                 {
                     "command": "wwsync.fullSync",
-                    "group": "navigation@2"
+                    "group": "navigation@2",
+                    "when": "config.wwsync.showButtons"
                 },
                 {
                     "command": "wwsync.run",
-                    "group": "navigation@3"
+                    "group": "navigation@3",
+                    "when": "config.wwsync.showButtons"
                 }
             ]
         }
