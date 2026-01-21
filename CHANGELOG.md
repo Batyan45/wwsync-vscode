@@ -3,6 +3,12 @@
 All notable changes to the "WWSync" extension will be documented in this file.
 
 
+
+## [0.1.1] - 2026-XX-XX
+
+### Changed
+- Automatically select server if it is the only one configured for the current folder.
+
 ## [0.1.0] - 2026-01-21
 
 ### Added

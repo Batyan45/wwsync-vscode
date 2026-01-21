@@ -55,7 +55,9 @@ export async function selectServer(
     const matchingServers = findServersForPath(config, currentPath);
 
     if (matchingServers.length === 1) {
-        return { config, serverAlias: matchingServers[0] };
+        const singleServer = matchingServers[0];
+        sessionState.set(currentPath, singleServer);
+        return { config, serverAlias: singleServer };
     }
 
     if (matchingServers.length > 1) {

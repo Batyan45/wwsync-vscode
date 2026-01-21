@@ -67,6 +67,18 @@ export class WWSyncStatusBar {
         if (sessionServer) {
             return sessionServer;
         }
+
+        // If no session state, check if there's only one configured server for this path
+        const config = loadConfig();
+        const servers = findServersForPath(config, currentPath);
+
+        if (servers.length === 1) {
+            // Auto-select the only available server
+            const singleServer = servers[0];
+            this.sessionState.set(currentPath, singleServer);
+            return singleServer;
+        }
+
         return undefined;
     }
 
