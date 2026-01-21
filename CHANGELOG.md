@@ -8,6 +8,8 @@ All notable changes to the "WWSync" extension will be documented in this file.
 
 ### Changed
 - Automatically select server if it is the only one configured for the current folder.
+- Replaced persistent success popup with a transient status bar message.
+- Added progress indicator notification during synchronization.
 
 ## [0.1.0] - 2026-01-21
 

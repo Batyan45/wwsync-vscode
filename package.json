@@ -2,7 +2,7 @@
     "name": "wwsync",
     "displayName": "WWSync",
     "description": "Sync files with remote servers via rsync",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "publisher": "batyan-soft",
     "icon": "images/icon.png",
     "repository": {

@@ -161,7 +161,7 @@ async function runRsyncCommand(
             outputChannel.appendLine('');
             if (code === 0) {
                 outputChannel.appendLine(`✔ ${operationName} completed successfully.`);
-                vscode.window.showInformationMessage(`${operationName} completed successfully.`);
+                vscode.window.setStatusBarMessage(`${operationName} completed successfully.`, 5000);
                 resolve();
             } else {
                 outputChannel.appendLine(`✖ ${operationName} failed with code ${code}.`);

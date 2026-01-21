@@ -41,7 +41,7 @@
         {
             "label": "VSCODE publish",
             "type": "shell",
-            "command": "npm run version ${input:versionType} && git add . && git commit -m \"Release v$(node -p \"require('./package.json').version\")\" && git tag v$(node -p \"require('./package.json').version\") && git push && git push --tags && vsce publish",
+            "command": "npm run version ${input:versionType}; if ($?) { git add . }; if ($?) { $v = (node -p \"require('./package.json').version\").Trim(); git commit -m \"Release v$v\" }; if ($?) { git tag v$v }; if ($?) { git push }; if ($?) { git push --tags }; if ($?) { vsce publish }",
             "presentation": {
                 "reveal": "always",
                 "panel": "shared"

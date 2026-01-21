@@ -112,11 +112,17 @@ async function executeSync(outputChannel: vscode.OutputChannel, fullSync: boolea
 
         outputChannel.show(true);
 
-        if (fullSync) {
-            await runFullSync(outputChannel, serverConfig.host, mapping);
-        } else {
-            await runSafeSync(outputChannel, serverConfig.host, mapping);
-        }
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: fullSync ? 'WWSync: Full Sync' : 'WWSync: Safe Sync',
+            cancellable: false
+        }, async () => {
+            if (fullSync) {
+                await runFullSync(outputChannel, serverConfig.host, mapping);
+            } else {
+                await runSafeSync(outputChannel, serverConfig.host, mapping);
+            }
+        });
     } catch (error: any) {
         vscode.window.showErrorMessage(`WWSync Error: ${error.message}`);
     }

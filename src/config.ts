@@ -22,22 +22,12 @@ const CONFIG_PATH = path.join(os.homedir(), '.wwsync');
 
 export function loadConfig(): WWConfig {
     if (!fs.existsSync(CONFIG_PATH)) {
-        const defaultConfig: WWConfig = {
-            servers: {
-                example: {
-                    host: "user@192.168.1.10",
-                    mappings: [
-                        {
-                            local: "/Users/user/projects/my-app",
-                            remote: "/var/www/my-app",
-                            excludes: [".git", "node_modules", "build", ".env", "*.log"]
-                        }
-                    ]
-                }
-            }
+        // Return empty config instead of creating default file
+        const emptyConfig: WWConfig = {
+            servers: {}
         };
-        saveConfig(defaultConfig);
-        return defaultConfig;
+        // Do NOT saveConfig here.
+        return emptyConfig;
     }
 
     try {

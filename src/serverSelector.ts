@@ -41,8 +41,30 @@ export async function selectServer(
     const serverNames = Object.keys(config.servers);
 
     // No servers configured
-    if (serverNames.length === 0 || (serverNames.length === 1 && serverNames[0] === 'example')) {
-        return await createNewServer(config);
+    if (serverNames.length === 0) {
+        const answer = await vscode.window.showInformationMessage(
+            'No .wwsync configuration found. Create one?',
+            'Yes',
+            'No'
+        );
+
+        if (answer === 'Yes') {
+            return await createNewServer(config);
+        }
+        return undefined;
+    }
+
+    // Treat 'example' configuration as unconfigured IF it's the only one
+    if (serverNames.length === 1 && serverNames[0] === 'example') {
+        const answer = await vscode.window.showInformationMessage(
+            'Only example configuration found. Create a new server?',
+            'Yes',
+            'No'
+        );
+
+        if (answer === 'Yes') {
+            return await createNewServer(config);
+        }
     }
 
     // Check session cache first
