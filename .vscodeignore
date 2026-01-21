@@ -1,0 +1,11 @@
+.vscode/**
+.github/**
+.gitignore
+src/**
+tsconfig.json
+package-lock.json
+*.vsix
+.wwsync
+CHANGELOG.md
+LICENSE.md
+README.md
