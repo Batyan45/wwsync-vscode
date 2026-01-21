@@ -1,4 +1,4 @@
-# WWSync for VSCode
+# <img src="images/icon.png" width="64" align="center" alt="icon" /> WWSync for VSCode
 
 A VSCode extension port of the [WWSync](https://github.com/Batyan45/wwsync) tool.
 
