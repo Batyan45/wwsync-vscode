@@ -57,10 +57,9 @@ export async function runFullSync(
             outputChannel.appendLine(`Total files to delete: ${filesToDelete.length}`);
 
             const confirm = await vscode.window.showWarningMessage(
-                `${filesToDelete.length} file(s) will be DELETED on the server. Continue?`,
+                `${filesToDelete.length} file(s) will be DELETED on the server. (See WWSync output for details)\nContinue?`,
                 { modal: true },
-                'Yes, delete',
-                'Cancel'
+                'Yes, delete'
             );
 
             if (confirm !== 'Yes, delete') {
@@ -97,14 +96,14 @@ function buildRsyncArgs(excludes: string[], withDelete: boolean): string[] {
     return args;
 }
 
-function parseDeletedFiles(output: string): string[] {
+export function parseDeletedFiles(output: string): string[] {
     const lines = output.split('\n');
     const files: string[] = [];
 
     for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed.startsWith('deleting ')) {
-            files.push(trimmed);
+            files.push(trimmed.replace('deleting ', ''));
         }
     }
 
