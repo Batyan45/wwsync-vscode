@@ -9,11 +9,14 @@ import { runRemoteSession } from './run';
 import { SessionState } from './sessionState';
 import { WWSyncStatusBar } from './statusBar';
 
+import { AskPassManager } from './askPass';
+
 // Session-based server selection storage
 const sessionState = new SessionState();
 let statusBar: WWSyncStatusBar;
 
 export function activate(context: vscode.ExtensionContext) {
+
     console.log('WWSync extension activated');
 
     const outputChannel = vscode.window.createOutputChannel('WWSync');
@@ -68,6 +71,8 @@ async function getCurrentWorkspaceFolder(): Promise<string | undefined> {
 }
 
 async function executeSync(outputChannel: vscode.OutputChannel, fullSync: boolean) {
+    const askPassManager = new AskPassManager(sessionState);
+    let env: NodeJS.ProcessEnv | undefined;
     try {
         const currentPath = await getCurrentWorkspaceFolder();
         if (!currentPath) {
@@ -110,21 +115,31 @@ async function executeSync(outputChannel: vscode.OutputChannel, fullSync: boolea
         config = mappingResult.config;
         const mapping = mappingResult.mapping;
 
+
+        // Prepare AskPass
+        try {
+            env = await askPassManager.prepare();
+        } catch (err) {
+            console.error('Failed to prepare AskPass manager', err);
+        }
+
         outputChannel.show(true);
 
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
             title: fullSync ? 'WWSync: Full Sync' : 'WWSync: Safe Sync',
-            cancellable: false
-        }, async () => {
+            cancellable: true
+        }, async (progress, token) => {
             if (fullSync) {
-                await runFullSync(outputChannel, serverConfig.host, mapping);
+                await runFullSync(outputChannel, serverConfig.host, mapping, token, env);
             } else {
-                await runSafeSync(outputChannel, serverConfig.host, mapping);
+                await runSafeSync(outputChannel, serverConfig.host, mapping, token, env);
             }
         });
     } catch (error: any) {
         vscode.window.showErrorMessage(`WWSync Error: ${error.message}`);
+    } finally {
+        askPassManager.cleanup();
     }
 }
 

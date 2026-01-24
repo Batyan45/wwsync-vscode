@@ -10,7 +10,9 @@ function ensureTrailingSlash(p: string): string {
 export async function runSafeSync(
     outputChannel: vscode.OutputChannel,
     host: string,
-    mapping: Mapping
+    mapping: Mapping,
+    token?: vscode.CancellationToken,
+    env?: NodeJS.ProcessEnv
 ): Promise<void> {
     const src = ensureTrailingSlash(mapping.local);
     const dest = `${host}:${mapping.remote}`;
@@ -24,13 +26,15 @@ export async function runSafeSync(
     const args = buildRsyncArgs(mapping.excludes, false);
     args.push(src, dest);
 
-    return runRsyncCommand(outputChannel, args, 'Safe sync');
+    return runRsyncCommand(outputChannel, args, 'Safe sync', token, env);
 }
 
 export async function runFullSync(
     outputChannel: vscode.OutputChannel,
     host: string,
-    mapping: Mapping
+    mapping: Mapping,
+    token?: vscode.CancellationToken,
+    env?: NodeJS.ProcessEnv
 ): Promise<void> {
     const src = ensureTrailingSlash(mapping.local);
     const dest = `${host}:${mapping.remote}`;
@@ -46,7 +50,10 @@ export async function runFullSync(
     dryRunArgs.push('--dry-run', src, dest);
 
     try {
-        const dryRunOutput = await runRsyncCommandWithOutput(dryRunArgs);
+        if (token?.isCancellationRequested) {
+            return;
+        }
+        const dryRunOutput = await runRsyncCommandWithOutput(dryRunArgs, token, env);
         const filesToDelete = parseDeletedFiles(dryRunOutput);
 
         if (filesToDelete.length > 0) {
@@ -71,11 +78,15 @@ export async function runFullSync(
             outputChannel.appendLine('✔ No files need to be deleted.');
         }
 
+        if (token?.isCancellationRequested) {
+            return;
+        }
+
         // Execute real sync
         const syncArgs = buildRsyncArgs(mapping.excludes, true);
         syncArgs.push(src, dest);
 
-        await runRsyncCommand(outputChannel, syncArgs, 'Full sync');
+        await runRsyncCommand(outputChannel, syncArgs, 'Full sync', token, env);
     } catch (error: any) {
         outputChannel.appendLine(`Error: ${error.message}`);
         throw error;
@@ -110,21 +121,28 @@ export function parseDeletedFiles(output: string): string[] {
     return files;
 }
 
-async function runRsyncCommandWithOutput(args: string[]): Promise<string> {
+async function runRsyncCommandWithOutput(args: string[], token?: vscode.CancellationToken, env?: NodeJS.ProcessEnv): Promise<string> {
     return new Promise((resolve, reject) => {
-        const process = cp.spawn('rsync', args, { shell: true });
+        const proc = cp.spawn('rsync', args, { shell: true, env: { ...process.env, ...env } });
+
+        if (token) {
+            token.onCancellationRequested(() => {
+                proc.kill();
+                reject(new Error('Operation cancelled'));
+            });
+        }
         let stdout = '';
         let stderr = '';
 
-        process.stdout.on('data', (data) => {
+        proc.stdout.on('data', (data: Buffer) => {
             stdout += data.toString();
         });
 
-        process.stderr.on('data', (data) => {
+        proc.stderr.on('data', (data: Buffer) => {
             stderr += data.toString();
         });
 
-        process.on('close', (code) => {
+        proc.on('close', (code: number | null) => {
             if (code === 0) {
                 resolve(stdout);
             } else {
@@ -132,7 +150,7 @@ async function runRsyncCommandWithOutput(args: string[]): Promise<string> {
             }
         });
 
-        process.on('error', (err) => {
+        proc.on('error', (err: Error) => {
             reject(err);
         });
     });
@@ -141,23 +159,33 @@ async function runRsyncCommandWithOutput(args: string[]): Promise<string> {
 async function runRsyncCommand(
     outputChannel: vscode.OutputChannel,
     args: string[],
-    operationName: string
+    operationName: string,
+    token?: vscode.CancellationToken,
+    env?: NodeJS.ProcessEnv
 ): Promise<void> {
     return new Promise((resolve, reject) => {
         outputChannel.appendLine(`Running: rsync ${args.join(' ')}`);
         outputChannel.appendLine('');
 
-        const process = cp.spawn('rsync', args, { shell: true });
+        const proc = cp.spawn('rsync', args, { shell: true, env: { ...process.env, ...env } });
 
-        process.stdout.on('data', (data) => {
+        if (token) {
+            token.onCancellationRequested(() => {
+                outputChannel.appendLine('');
+                outputChannel.appendLine(`✖ ${operationName} cancelled by user.`);
+                proc.kill();
+            });
+        }
+
+        proc.stdout.on('data', (data: Buffer) => {
             outputChannel.append(data.toString());
         });
 
-        process.stderr.on('data', (data) => {
+        proc.stderr.on('data', (data: Buffer) => {
             outputChannel.append(data.toString());
         });
 
-        process.on('close', (code) => {
+        proc.on('close', (code: number | null) => {
             outputChannel.appendLine('');
             if (code === 0) {
                 outputChannel.appendLine(`✔ ${operationName} completed successfully.`);
@@ -170,7 +198,7 @@ async function runRsyncCommand(
             }
         });
 
-        process.on('error', (err) => {
+        proc.on('error', (err: Error) => {
             outputChannel.appendLine(`Error: ${err.message}`);
             reject(err);
         });

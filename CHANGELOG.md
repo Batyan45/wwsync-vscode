@@ -4,7 +4,14 @@ All notable changes to the "WWSync" extension will be documented in this file.
 
 
 
-## [0.1.1] - 2026-XX-XX
+## [0.1.2] - 2026-01-24
+
+### Added
+- **Password/Passphrase Handling**: Added support for interactive password and key passphrase entry during sync.
+- **Credential Caching**: Entered passwords are remembered for the duration of the current session to avoid repeated prompts.
+- Added ability to cancel sync process.
+
+## [0.1.1] - 2026-01-22
 
 ### Changed
 - Automatically select server if it is the only one configured for the current folder.

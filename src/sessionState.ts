@@ -17,4 +17,18 @@ export class SessionState {
             this._onDidChange.fire();
         }
     }
+
+    private _passwords: Map<string, string> = new Map();
+
+    public resetPasswords() {
+        this._passwords.clear();
+    }
+
+    public getPassword(prompt: string): string | undefined {
+        return this._passwords.get(prompt);
+    }
+
+    public setPassword(prompt: string, password: string) {
+        this._passwords.set(prompt, password);
+    }
 }

@@ -9,6 +9,7 @@ It allows you to synchronize your project with a remote server using `rsync` dir
 - **Safe Sync** ($(cloud-upload)): Uploads files without deleting anything on the remote server.
 - **Full Sync** ($(sync)): Mirrors the local folder to the remote, deleting extra files (with confirmation).
 - **Run** ($(terminal)): Opens an SSH session to the project folder.
+- **Interactive Auth**: Handles password and key passphrase prompts with secure input and session-based caching.
 
 ## User Interface
 
