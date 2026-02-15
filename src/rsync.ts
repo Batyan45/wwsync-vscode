@@ -101,7 +101,7 @@ function buildRsyncArgs(excludes: string[], withDelete: boolean): string[] {
     }
 
     if (withDelete) {
-        args.push('--delete');
+        args.push('--delete', '--force');
     }
 
     return args;
@@ -114,7 +114,7 @@ export function parseDeletedFiles(output: string): string[] {
     for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed.startsWith('deleting ')) {
-            files.push(trimmed.replace('deleting ', ''));
+            files.push(trimmed);
         }
     }
 

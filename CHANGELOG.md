@@ -4,6 +4,12 @@ All notable changes to the "WWSync" extension will be documented in this file.
 
 
 
+## [0.1.3] - 2026-02-15
+
+### Changed
+- Added `--force` flag to Full Sync mode to ensure deletion of non-empty directories on remote.
+- Improved output formatting for deleted files in Full Sync dry run.
+
 ## [0.1.2] - 2026-01-24
 
 ### Added
