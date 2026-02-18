@@ -8,6 +8,7 @@ It allows you to synchronize your project with a remote server using `rsync` dir
 
 - **Safe Sync** ($(cloud-upload)): Uploads files without deleting anything on the remote server.
 - **Full Sync** ($(sync)): Mirrors the local folder to the remote, deleting extra files (with confirmation).
+- **Artifacts Download** ($(cloud-download)): Downloads only new remote files into `.wwsync_<server>_artifacts`. Changed remote files are listed as warning and are not downloaded.
 - **Run** ($(terminal)): Opens an SSH session to the project folder.
 - **Interactive Auth**: Handles password and key passphrase prompts with secure input and session-based caching.
 
@@ -21,7 +22,7 @@ WWSync provides two ways to interact with your servers:
     -   The server list is filtered to only show servers configured for the current workspace folder.
 
 2.  **Title Bar Buttons**:
-    -   Quick access buttons in the editor title area for Safe Sync, Full Sync, and Run.
+    -   Quick access buttons in the editor title area for Safe Sync, Full Sync, Download Artifacts, and Run.
 
 ## Configuration
 
@@ -35,5 +36,25 @@ You can customize the extension appearance in VSCode Settings:
 1.  Open a folder in VSCode.
 2.  Click the WWSync status bar item or title bar buttons to start.
 3.  **Config**: The extension uses a `~/.wwsync` config file. It will prompt you to create it if missing, or add a new server/mapping if none exists for the current directory.
+
+### Config Example
+
+```json
+{
+    "servers": {
+        "production": {
+            "host": "user@example.com",
+            "mappings": [
+                {
+                    "local": "/Users/dev/my-project",
+                    "remote": "/var/www/html/api",
+                    "excludes": [".git", "node_modules", ".env"],
+                    "artifact_excludes": ["*.tmp", "*.cache", ".DS_Store"]
+                }
+            ]
+        }
+    }
+}
+```
 
 For full details on the underlying logic, see the [original script](https://github.com/Batyan45/wwsync).

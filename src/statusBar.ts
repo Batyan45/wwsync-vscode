@@ -142,6 +142,7 @@ export class WWSyncStatusBar {
         const actionItems: vscode.QuickPickItem[] = [
             { label: '$(cloud-upload) Safe Sync', description: 'wwsync.safeSync' },
             { label: '$(sync) Full Sync', description: 'wwsync.fullSync' },
+            { label: '$(cloud-download) Download Artifacts', description: 'wwsync.downloadArtifacts' },
             { label: '$(terminal) Run Remote Session', description: 'wwsync.run' }
         ];
 

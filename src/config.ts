@@ -6,6 +6,7 @@ export interface Mapping {
     local: string;
     remote: string;
     excludes: string[];
+    artifact_excludes?: string[];
 }
 
 export interface ServerConfig {

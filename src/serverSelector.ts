@@ -233,10 +233,20 @@ export async function selectOrCreateMapping(
         ? excludesInput.split(',').map(e => e.trim()).filter(e => e)
         : [];
 
+    const artifactExcludesInput = await vscode.window.showInputBox({
+        prompt: 'Enter artifact-only exclusions separated by commas (optional)',
+        placeHolder: '*.tmp, *.cache, .DS_Store',
+    });
+
+    const artifactExcludes = artifactExcludesInput
+        ? artifactExcludesInput.split(',').map(e => e.trim()).filter(e => e)
+        : [];
+
     const newMapping: Mapping = {
         local: currentPath,
         remote: remotePath,
-        excludes
+        excludes,
+        artifact_excludes: artifactExcludes
     };
 
     serverConfig.mappings.push(newMapping);

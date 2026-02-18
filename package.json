@@ -2,7 +2,7 @@
     "name": "wwsync",
     "displayName": "WWSync",
     "description": "Sync files with remote servers via rsync",
-    "version": "0.1.3",
+    "version": "1.0.0",
     "publisher": "batyan-soft",
     "icon": "images/icon.png",
     "repository": {
@@ -52,6 +52,11 @@
                 "icon": "$(terminal)"
             },
             {
+                "command": "wwsync.downloadArtifacts",
+                "title": "WWSync: Download Artifacts",
+                "icon": "$(cloud-download)"
+            },
+            {
                 "command": "wwsync.showMenu",
                 "title": "WWSync: Show Menu"
             }
@@ -71,6 +76,11 @@
                 {
                     "command": "wwsync.run",
                     "group": "navigation@3",
+                    "when": "config.wwsync.showButtons"
+                },
+                {
+                    "command": "wwsync.downloadArtifacts",
+                    "group": "navigation@4",
                     "when": "config.wwsync.showButtons"
                 }
             ]

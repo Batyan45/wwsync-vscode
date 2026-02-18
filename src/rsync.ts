@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import * as path from 'path';
+import * as fs from 'fs/promises';
+import * as os from 'os';
 import { Mapping } from './config';
 
 function ensureTrailingSlash(p: string): string {
@@ -91,6 +93,147 @@ export async function runFullSync(
         outputChannel.appendLine(`Error: ${error.message}`);
         throw error;
     }
+}
+
+export async function downloadRemoteArtifacts(
+    outputChannel: vscode.OutputChannel,
+    host: string,
+    serverAlias: string,
+    mapping: Mapping,
+    token?: vscode.CancellationToken,
+    env?: NodeJS.ProcessEnv
+): Promise<void> {
+    const artifactExcludes = mapping.artifact_excludes ?? [];
+    const allExcludes = Array.from(new Set([...(mapping.excludes ?? []), ...artifactExcludes]));
+    const localRoot = mapping.local;
+    const artifactsDir = path.join(localRoot, `.wwsync_${serverAlias}_artifacts`);
+
+    outputChannel.appendLine('');
+    outputChannel.appendLine('===========================================================');
+    outputChannel.appendLine(`>>> Collecting remote artifacts: ${host}:${mapping.remote}`);
+    outputChannel.appendLine('===========================================================');
+
+    const dryRunArgs = buildRemoteDiffArgs(host, localRoot, mapping.remote, allExcludes);
+    let dryRunOutput = '';
+    try {
+        dryRunOutput = await runRsyncCommandWithOutput(dryRunArgs, token, env);
+    } catch (error: any) {
+        outputChannel.appendLine(`Error: ${error.message}`);
+        throw new Error('Failed to collect remote diff via rsync dry-run.');
+    }
+
+    const { newFiles, changedFiles } = parseRsyncItemizedOutput(dryRunOutput);
+
+    if (changedFiles.length > 0) {
+        outputChannel.appendLine('');
+        outputChannel.appendLine("Warning: changed files detected on remote (won't be downloaded):");
+        changedFiles.forEach(file => outputChannel.appendLine(`  - ${file}`));
+        vscode.window.showWarningMessage(
+            `${changedFiles.length} changed remote file(s) detected. They were skipped (see WWSync output).`
+        );
+    }
+
+    const canContinue = await resetArtifactsDirWithConfirmation(artifactsDir);
+    if (!canContinue) {
+        outputChannel.appendLine('Operation cancelled.');
+        return;
+    }
+
+    if (newFiles.length === 0) {
+        outputChannel.appendLine('No new remote files found. Artifacts directory is empty.');
+        vscode.window.showInformationMessage('No new remote files found.');
+        return;
+    }
+
+    const tempFile = path.join(os.tmpdir(), `wwsync-artifacts-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
+    try {
+        await fs.writeFile(tempFile, `${newFiles.join('\n')}\n`, 'utf-8');
+
+        const downloadArgs = [
+            '-azP',
+            '--files-from', tempFile,
+            `${host}:${ensureTrailingSlash(mapping.remote)}`,
+            ensureTrailingSlash(artifactsDir)
+        ];
+
+        await runRsyncCommand(outputChannel, downloadArgs, 'Artifacts download', token, env);
+        outputChannel.appendLine(`Downloaded ${newFiles.length} new remote file(s) into ${path.basename(artifactsDir)}.`);
+    } finally {
+        await fs.rm(tempFile, { force: true }).catch(() => undefined);
+    }
+}
+
+function buildRemoteDiffArgs(host: string, localPath: string, remotePath: string, excludes: string[]): string[] {
+    const args = ['-az', '--dry-run', '--itemize-changes'];
+
+    for (const exc of excludes) {
+        args.push('--exclude', exc);
+    }
+
+    args.push(`${host}:${ensureTrailingSlash(remotePath)}`, ensureTrailingSlash(localPath));
+    return args;
+}
+
+async function resetArtifactsDirWithConfirmation(artifactsDir: string): Promise<boolean> {
+    try {
+        await fs.access(artifactsDir);
+        const overwrite = await vscode.window.showWarningMessage(
+            `Artifacts directory '${path.basename(artifactsDir)}' already exists. Delete and recreate it?`,
+            { modal: true },
+            'Yes, overwrite'
+        );
+        if (overwrite !== 'Yes, overwrite') {
+            return false;
+        }
+        await fs.rm(artifactsDir, { recursive: true, force: true });
+    } catch {
+        // Directory doesn't exist, nothing to remove.
+    }
+
+    await fs.mkdir(artifactsDir, { recursive: true });
+    return true;
+}
+
+export function parseRsyncItemizedOutput(output: string): { newFiles: string[]; changedFiles: string[] } {
+    const newFiles: string[] = [];
+    const changedFiles: string[] = [];
+
+    for (const line of output.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed) {
+            continue;
+        }
+
+        // Expected default --itemize-changes line format:
+        // >f+++++++++ path/to/file
+        // >f..t...... path/to/file
+        const match = trimmed.match(/^(\S+)\s+(.+)$/);
+        if (!match) {
+            continue;
+        }
+
+        const itemCode = match[1].trim();
+        const relPath = match[2].trim();
+
+        if (!relPath) {
+            continue;
+        }
+
+        if (!itemCode.startsWith('>f')) {
+            continue;
+        }
+
+        if (itemCode === '>f+++++++++') {
+            newFiles.push(relPath);
+        } else {
+            changedFiles.push(relPath);
+        }
+    }
+
+    return {
+        newFiles: Array.from(new Set(newFiles)),
+        changedFiles: Array.from(new Set(changedFiles))
+    };
 }
 
 function buildRsyncArgs(excludes: string[], withDelete: boolean): string[] {

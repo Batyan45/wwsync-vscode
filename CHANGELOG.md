@@ -2,7 +2,19 @@
 
 All notable changes to the "WWSync" extension will be documented in this file.
 
+## [1.0.0] - 2026-02-18
 
+### Added
+- **Artifacts Download command**: Added `Download Artifacts` action (`wwsync.downloadArtifacts`) in command palette, editor title buttons, and status bar quick menu.
+- Added support for `artifact_excludes` in mapping config.
+- Added `artifact_excludes` setup prompt when creating a new mapping.
+
+### Changed
+- Implemented remote artifacts flow aligned with upstream Python project:
+- downloads only **new** remote files into `.wwsync_<server>_artifacts`
+- shows warning list for **changed** remote files and skips them
+- asks confirmation before deleting/recreating existing artifacts folder
+- Updated README with artifacts feature description and config example.
 
 ## [0.1.3] - 2026-02-15
 

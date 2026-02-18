@@ -1,10 +1,8 @@
 import * as vscode from 'vscode';
-import * as os from 'os';
 import * as path from 'path';
-import * as fs from 'fs';
-import { loadConfig, saveConfig, WWConfig, ServerConfig, Mapping } from './config';
+import { loadConfig } from './config';
 import { selectServer, selectOrCreateMapping } from './serverSelector';
-import { runSafeSync, runFullSync } from './rsync';
+import { runSafeSync, runFullSync, downloadRemoteArtifacts } from './rsync';
 import { runRemoteSession } from './run';
 import { SessionState } from './sessionState';
 import { WWSyncStatusBar } from './statusBar';
@@ -39,12 +37,17 @@ export function activate(context: vscode.ExtensionContext) {
         await executeRun(outputChannel);
     });
 
+    // Download artifacts command
+    const downloadArtifactsCmd = vscode.commands.registerCommand('wwsync.downloadArtifacts', async () => {
+        await executeDownloadArtifacts(outputChannel);
+    });
+
     // Show Menu command
     const showMenuCmd = vscode.commands.registerCommand('wwsync.showMenu', async () => {
         await statusBar.showMenu();
     });
 
-    context.subscriptions.push(safeSyncCmd, fullSyncCmd, runCmd, showMenuCmd, outputChannel);
+    context.subscriptions.push(safeSyncCmd, fullSyncCmd, runCmd, downloadArtifactsCmd, showMenuCmd, outputChannel);
 }
 
 async function getCurrentWorkspaceFolder(): Promise<string | undefined> {
@@ -175,6 +178,56 @@ async function executeRun(outputChannel: vscode.OutputChannel) {
         runRemoteSession(serverConfig.host, mapping.remote, shellType);
     } catch (error: any) {
         vscode.window.showErrorMessage(`WWSync Error: ${error.message}`);
+    }
+}
+
+async function executeDownloadArtifacts(outputChannel: vscode.OutputChannel) {
+    const askPassManager = new AskPassManager(sessionState);
+    let env: NodeJS.ProcessEnv | undefined;
+    try {
+        const currentPath = await getCurrentWorkspaceFolder();
+        if (!currentPath) {
+            vscode.window.showErrorMessage('No workspace folder found. Please open a folder first.');
+            return;
+        }
+
+        let config = loadConfig();
+
+        const serverResult = await selectServer(config, currentPath, sessionState);
+        if (!serverResult) {
+            return;
+        }
+
+        config = serverResult.config;
+        const serverAlias = serverResult.serverAlias;
+        const serverConfig = config.servers[serverAlias];
+
+        const mappingResult = await selectOrCreateMapping(config, serverAlias, currentPath);
+        if (!mappingResult) {
+            return;
+        }
+
+        const mapping = mappingResult.mapping;
+
+        try {
+            env = await askPassManager.prepare();
+        } catch (err) {
+            console.error('Failed to prepare AskPass manager', err);
+        }
+
+        outputChannel.show(true);
+
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'WWSync: Download Artifacts',
+            cancellable: true
+        }, async (_progress, token) => {
+            await downloadRemoteArtifacts(outputChannel, serverConfig.host, serverAlias, mapping, token, env);
+        });
+    } catch (error: any) {
+        vscode.window.showErrorMessage(`WWSync Error: ${error.message}`);
+    } finally {
+        askPassManager.cleanup();
     }
 }
 
