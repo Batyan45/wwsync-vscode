@@ -2,6 +2,11 @@
 
 All notable changes to the "WWSync" extension will be documented in this file.
 
+## [1.0.1] - 2026-04-08
+
+### Fixed
+- Fixed rsync commands failing with `Unexpected remote arg` error for hosts containing `:` in path (e.g. `host:/remote/path`). Removed `shell: true` from `cp.spawn` to prevent shell interpretation of arguments.
+
 ## [1.0.0] - 2026-02-18
 
 ### Added

@@ -164,7 +164,7 @@ export async function downloadRemoteArtifacts(
 }
 
 function buildRemoteDiffArgs(host: string, localPath: string, remotePath: string, excludes: string[]): string[] {
-    const args = ['-az', '--dry-run', '--itemize-changes'];
+    const args = ['-az', '--dry-run', '--itemize-changes', '--out-format=%i\t%n'];
 
     for (const exc of excludes) {
         args.push('--exclude', exc);
@@ -204,16 +204,15 @@ export function parseRsyncItemizedOutput(output: string): { newFiles: string[]; 
             continue;
         }
 
-        // Expected default --itemize-changes line format:
-        // >f+++++++++ path/to/file
-        // >f..t...... path/to/file
-        const match = trimmed.match(/^(\S+)\s+(.+)$/);
-        if (!match) {
+        // Expected --out-format=%i\t%n line format:
+        // >f+++++++++\tpath/to/file
+        // >f..t......\tpath/to/file
+        if (!trimmed.includes('\t')) {
             continue;
         }
 
-        const itemCode = match[1].trim();
-        const relPath = match[2].trim();
+        const [itemCode, ...rest] = trimmed.split('\t');
+        const relPath = rest.join('\t').trim();
 
         if (!relPath) {
             continue;
@@ -266,7 +265,7 @@ export function parseDeletedFiles(output: string): string[] {
 
 async function runRsyncCommandWithOutput(args: string[], token?: vscode.CancellationToken, env?: NodeJS.ProcessEnv): Promise<string> {
     return new Promise((resolve, reject) => {
-        const proc = cp.spawn('rsync', args, { shell: true, env: { ...process.env, ...env } });
+        const proc = cp.spawn('rsync', args, { env: { ...process.env, ...env } });
 
         if (token) {
             token.onCancellationRequested(() => {
@@ -310,7 +309,7 @@ async function runRsyncCommand(
         outputChannel.appendLine(`Running: rsync ${args.join(' ')}`);
         outputChannel.appendLine('');
 
-        const proc = cp.spawn('rsync', args, { shell: true, env: { ...process.env, ...env } });
+        const proc = cp.spawn('rsync', args, { env: { ...process.env, ...env } });
 
         if (token) {
             token.onCancellationRequested(() => {
