@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { loadConfig } from './config';
+import { loadConfig, mergeExcludes } from './config';
 import { selectServer, selectOrCreateMapping } from './serverSelector';
 import { runSafeSync, runFullSync, downloadRemoteArtifacts } from './rsync';
 import { runRemoteSession } from './run';
@@ -126,6 +126,12 @@ async function executeSync(outputChannel: vscode.OutputChannel, fullSync: boolea
             console.error('Failed to prepare AskPass manager', err);
         }
 
+        // Merge general_excludes with per-mapping excludes
+        const effectiveMapping = {
+            ...mapping,
+            excludes: mergeExcludes(config.general_excludes, mapping.excludes)
+        };
+
         outputChannel.show(true);
 
         await vscode.window.withProgress({
@@ -134,9 +140,9 @@ async function executeSync(outputChannel: vscode.OutputChannel, fullSync: boolea
             cancellable: true
         }, async (progress, token) => {
             if (fullSync) {
-                await runFullSync(outputChannel, serverConfig.host, mapping, token, env);
+                await runFullSync(outputChannel, serverConfig.host, effectiveMapping, token, env);
             } else {
-                await runSafeSync(outputChannel, serverConfig.host, mapping, token, env);
+                await runSafeSync(outputChannel, serverConfig.host, effectiveMapping, token, env);
             }
         });
     } catch (error: any) {
@@ -215,6 +221,12 @@ async function executeDownloadArtifacts(outputChannel: vscode.OutputChannel) {
             console.error('Failed to prepare AskPass manager', err);
         }
 
+        // Merge general_excludes with per-mapping excludes
+        const effectiveMapping = {
+            ...mapping,
+            excludes: mergeExcludes(config.general_excludes, mapping.excludes)
+        };
+
         outputChannel.show(true);
 
         await vscode.window.withProgress({
@@ -222,7 +234,7 @@ async function executeDownloadArtifacts(outputChannel: vscode.OutputChannel) {
             title: 'WWSync: Download Artifacts',
             cancellable: true
         }, async (_progress, token) => {
-            await downloadRemoteArtifacts(outputChannel, serverConfig.host, serverAlias, mapping, token, env);
+            await downloadRemoteArtifacts(outputChannel, serverConfig.host, serverAlias, effectiveMapping, token, env);
         });
     } catch (error: any) {
         vscode.window.showErrorMessage(`WWSync Error: ${error.message}`);

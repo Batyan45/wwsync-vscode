@@ -16,7 +16,16 @@ export interface ServerConfig {
 }
 
 export interface WWConfig {
+    general_excludes?: string[];
     servers: { [key: string]: ServerConfig };
+}
+
+/**
+ * Merge general_excludes with per-mapping excludes, preserving order and removing duplicates.
+ */
+export function mergeExcludes(generalExcludes: string[] | undefined, mappingExcludes: string[] | undefined): string[] {
+    const combined = [...(generalExcludes ?? []), ...(mappingExcludes ?? [])];
+    return [...new Map(combined.map(e => [e, e])).values()];
 }
 
 const CONFIG_PATH = path.join(os.homedir(), '.wwsync');

@@ -47,7 +47,7 @@ export async function runFullSync(
     outputChannel.appendLine('Checking for files to delete on remote...');
     outputChannel.appendLine('═══════════════════════════════════════════════════════════');
 
-    // First, dry run to check for deletions
+    // First, dry run to check for deletions (informational)
     const dryRunArgs = buildRsyncArgs(mapping.excludes, true);
     dryRunArgs.push('--dry-run', src, dest);
 
@@ -64,31 +64,45 @@ export async function runFullSync(
             filesToDelete.forEach(f => outputChannel.appendLine(`  - ${f}`));
             outputChannel.appendLine('');
             outputChannel.appendLine(`Total files to delete: ${filesToDelete.length}`);
+        }
 
-            const confirm = await vscode.window.showWarningMessage(
-                `${filesToDelete.length} file(s) will be DELETED on the server. (See WWSync output for details)\nContinue?`,
-                { modal: true },
-                'Yes, delete'
-            );
+        outputChannel.appendLine('');
+        outputChannel.appendLine('The remote folder will be completely recreated.');
 
-            if (confirm !== 'Yes, delete') {
-                outputChannel.appendLine('Operation cancelled.');
-                vscode.window.showInformationMessage('Full sync cancelled.');
-                return;
-            }
-        } else {
-            outputChannel.appendLine('✔ No files need to be deleted.');
+        const confirm = await vscode.window.showWarningMessage(
+            filesToDelete.length > 0
+                ? `${filesToDelete.length} file(s) will be DELETED on the server. The remote folder will be completely recreated. (See WWSync output for details)\nContinue?`
+                : `The remote folder will be completely recreated.\nContinue?`,
+            { modal: true },
+            'Yes, continue'
+        );
+
+        if (confirm !== 'Yes, continue') {
+            outputChannel.appendLine('Operation cancelled.');
+            vscode.window.showInformationMessage('Full sync cancelled.');
+            return;
         }
 
         if (token?.isCancellationRequested) {
             return;
         }
 
-        // Execute real sync
-        const syncArgs = buildRsyncArgs(mapping.excludes, true);
-        syncArgs.push(src, dest);
+        // Recreate remote directory (rm -rf contents, then mkdir -p)
+        outputChannel.appendLine('Recreating remote directory...');
+        const recreateCmd = `rm -rf ${mapping.remote} && mkdir -p ${mapping.remote}`;
+        await runSshCommand(host, recreateCmd, token, env);
 
-        await runRsyncCommand(outputChannel, syncArgs, 'Full sync', token, env);
+        if (token?.isCancellationRequested) {
+            return;
+        }
+
+        // Upload all content fresh (no --delete needed since dir is empty)
+        outputChannel.appendLine('Uploading all files...');
+        const uploadArgs = buildRsyncArgs(mapping.excludes, false);
+        uploadArgs.push(src, dest);
+
+        await runRsyncCommand(outputChannel, uploadArgs, 'Full sync', token, env);
+        outputChannel.appendLine('Remote folder recreated successfully.');
     } catch (error: any) {
         outputChannel.appendLine(`Error: ${error.message}`);
         throw error;
@@ -261,6 +275,36 @@ export function parseDeletedFiles(output: string): string[] {
     }
 
     return files;
+}
+
+async function runSshCommand(host: string, command: string, token?: vscode.CancellationToken, env?: NodeJS.ProcessEnv): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const proc = cp.spawn('ssh', [host, command], { env: { ...process.env, ...env } });
+
+        if (token) {
+            token.onCancellationRequested(() => {
+                proc.kill();
+                reject(new Error('Operation cancelled'));
+            });
+        }
+
+        let stderr = '';
+        proc.stderr.on('data', (data: Buffer) => {
+            stderr += data.toString();
+        });
+
+        proc.on('close', (code: number | null) => {
+            if (code === 0) {
+                resolve();
+            } else {
+                reject(new Error(stderr || `ssh exited with code ${code}`));
+            }
+        });
+
+        proc.on('error', (err: Error) => {
+            reject(err);
+        });
+    });
 }
 
 async function runRsyncCommandWithOutput(args: string[], token?: vscode.CancellationToken, env?: NodeJS.ProcessEnv): Promise<string> {

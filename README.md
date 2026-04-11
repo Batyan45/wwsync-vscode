@@ -7,7 +7,7 @@ It allows you to synchronize your project with a remote server using `rsync` dir
 ## Features
 
 - **Safe Sync** ($(cloud-upload)): Uploads files without deleting anything on the remote server.
-- **Full Sync** ($(sync)): Mirrors the local folder to the remote, deleting extra files (with confirmation).
+- **Full Sync** ($(sync)): Completely recreates the remote folder (rm -rf + mkdir) and uploads all local content fresh (with confirmation).
 - **Artifacts Download** ($(cloud-download)): Downloads only new remote files into `.wwsync_<server>_artifacts`. Changed remote files are listed as warning and are not downloaded.
 - **Run** ($(terminal)): Opens an SSH session to the project folder.
 - **Interactive Auth**: Handles password and key passphrase prompts with secure input and session-based caching.
@@ -41,6 +41,7 @@ You can customize the extension appearance in VSCode Settings:
 
 ```json
 {
+    "general_excludes": [".git", ".DS_Store", "__pycache__"],
     "servers": {
         "production": {
             "host": "user@example.com",
@@ -48,8 +49,8 @@ You can customize the extension appearance in VSCode Settings:
                 {
                     "local": "/Users/dev/my-project",
                     "remote": "/var/www/html/api",
-                    "excludes": [".git", "node_modules", ".env"],
-                    "artifact_excludes": ["*.tmp", "*.cache", ".DS_Store"]
+                    "excludes": ["node_modules", ".env"],
+                    "artifact_excludes": ["*.tmp", "*.cache"]
                 }
             ]
         }

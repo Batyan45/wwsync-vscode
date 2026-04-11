@@ -2,6 +2,15 @@
 
 All notable changes to the "WWSync" extension will be documented in this file.
 
+## [1.1.0] - 2026-04-08
+
+### Added
+- Added support for `general_excludes` in the `.wwsync` config file. This allows you to define global exclusion patterns (like `.git` and `.DS_Store`) that apply across all servers and mappings.
+
+### Changed
+- Changed `--full` sync operation logic to match the upstream Python project: the remote directory is now entirely recreated (`ssh rm -rf && mkdir -p`) before uploading all files, replacing the previous incremental `rsync --delete` approach to guarantee a clean state.
+
+
 ## [1.0.1] - 2026-04-08
 
 ### Fixed
