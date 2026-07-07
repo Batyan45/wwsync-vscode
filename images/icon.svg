@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="WWSync icon">
+    <defs>
+        <linearGradient id="bg" x1="8" y1="4" x2="120" y2="128" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#303437"/>
+            <stop offset="0.54" stop-color="#1e2224"/>
+            <stop offset="1" stop-color="#111416"/>
+        </linearGradient>
+        <linearGradient id="cyan" x1="18" y1="28" x2="112" y2="96" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#64ddff"/>
+            <stop offset="0.55" stop-color="#31b7e6"/>
+            <stop offset="1" stop-color="#168cb9"/>
+        </linearGradient>
+        <linearGradient id="green" x1="56" y1="28" x2="112" y2="100" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#b5ff7a"/>
+            <stop offset="0.58" stop-color="#65e6a0"/>
+            <stop offset="1" stop-color="#1bbf82"/>
+        </linearGradient>
+        <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="150%">
+            <feDropShadow dx="0" dy="4" stdDeviation="2.4" flood-color="#020607" flood-opacity="0.72"/>
+        </filter>
+        <clipPath id="tile-clip">
+            <rect x="1" y="1" width="126" height="126" rx="25"/>
+        </clipPath>
+    </defs>
+    <rect x="1" y="1" width="126" height="126" rx="25" fill="url(#bg)"/>
+    <g clip-path="url(#tile-clip)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <g opacity="0.36" stroke="#6f8589" stroke-width="1.25">
+            <path d="M17 20h14v-8"/>
+            <path d="M47 13v17h11"/>
+            <path d="M73 9v13h13"/>
+            <path d="M106 19H91v14"/>
+            <path d="M13 50h15l8-8h12"/>
+            <path d="M88 41h20l8-8"/>
+            <path d="M19 92h19l9 9h16"/>
+            <path d="M81 108h19v11"/>
+            <path d="M114 79h-14l-9 9H76"/>
+        </g>
+        <g opacity="0.3" fill="#68e6a3">
+            <circle cx="31" cy="12" r="1.8"/>
+            <circle cx="58" cy="30" r="1.8"/>
+            <circle cx="86" cy="22" r="1.8"/>
+            <circle cx="48" cy="42" r="1.8"/>
+            <circle cx="76" cy="88" r="1.8"/>
+            <circle cx="100" cy="108" r="1.8"/>
+        </g>
+    </g>
+    <g filter="url(#soft-shadow)" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 64L32 84L43 54L54 84L65 64" fill="none" stroke="url(#cyan)" stroke-width="9"/>
+        <path d="M54 64L65 84L76 54L87 84L98 64" fill="none" stroke="url(#cyan)" stroke-width="9"/>
+        <path d="M54 64L65 84L76 54" fill="none" stroke="url(#green)" stroke-width="9"/>
+        <path d="M66 62V43" fill="none" stroke="url(#green)" stroke-width="6.4"/>
+        <path d="M66 37L61.4 44.6H70.6Z" fill="url(#green)"/>
+        <path d="M91 60L105 46" fill="none" stroke="url(#green)" stroke-width="6.4"/>
+        <path d="M109 42L101.1 44.5L106.5 49.9Z" fill="url(#green)"/>
+        <circle cx="32" cy="84" r="2.2" fill="#d7ffe6"/>
+        <circle cx="87" cy="84" r="2.2" fill="#d7ffe6"/>
+    </g>
+    <rect x="1.5" y="1.5" width="125" height="125" rx="24.5" fill="none" stroke="#6f8589" stroke-opacity="0.62" stroke-width="1.25"/>
+</svg>
