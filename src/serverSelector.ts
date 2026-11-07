@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { WWConfig, Mapping, saveConfig } from './config';
+import { WWConfig, Mapping, ServerConfig, saveConfig } from './config';
 import { SessionState } from './sessionState';
+import { REMOTE_SCHEME } from './remoteFs';
 
 interface ServerSelectionResult {
     config: WWConfig;
@@ -13,17 +14,88 @@ interface MappingSelectionResult {
     mapping: Mapping;
 }
 
-function normalizePath(p: string): string {
-    return path.normalize(p).toLowerCase();
+/** Windows paths ignore case; Linux/WSL paths must retain it when matching mappings. */
+export function normalizeLocalPath(p: string): string {
+    const normalized = path.normalize(p);
+    return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+/**
+ * Local folder to sync: the single workspace folder, a picked one when several are open,
+ * or the active file's folder when no folder is open. Remote (wwsync:) folders/files are ignored.
+ */
+export async function getCurrentWorkspaceFolder(): Promise<string | undefined> {
+    const workspaceFolders = (vscode.workspace.workspaceFolders ?? []).filter(f => f.uri.scheme !== REMOTE_SCHEME);
+    if (workspaceFolders.length === 0) {
+        // Try to get folder from active editor
+        const activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor && activeEditor.document.uri.scheme !== REMOTE_SCHEME) {
+            return path.dirname(activeEditor.document.uri.fsPath);
+        }
+        return undefined;
+    }
+
+    if (workspaceFolders.length === 1) {
+        return workspaceFolders[0].uri.fsPath;
+    }
+
+    // Multiple workspace folders - let user pick
+    const picked = await vscode.window.showQuickPick(
+        workspaceFolders.map(f => ({ label: f.name, description: f.uri.fsPath, folder: f })),
+        { placeHolder: 'Select workspace folder' }
+    );
+    return picked?.folder.uri.fsPath;
+}
+
+/** Workspace folder of the active editor, or the only workspace folder. Never prompts. */
+export function getActiveWorkspaceFolder(): string | undefined {
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor) {
+        const workspaceFolder = vscode.workspace.getWorkspaceFolder(activeEditor.document.uri);
+        if (workspaceFolder && workspaceFolder.uri.scheme !== REMOTE_SCHEME) {
+            return workspaceFolder.uri.fsPath;
+        }
+    }
+
+    const workspaceFolders = (vscode.workspace.workspaceFolders ?? []).filter(f => f.uri.scheme !== REMOTE_SCHEME);
+    if (workspaceFolders.length === 1) {
+        return workspaceFolders[0].uri.fsPath;
+    }
+
+    return undefined;
+}
+
+/**
+ * Server selected for the folder in this session, or the only server mapped to it (which then
+ * becomes the session choice). This is the server shown in the status bar. Never prompts.
+ */
+export function getRememberedServer(config: WWConfig, currentPath: string, sessionState: SessionState): string | undefined {
+    const sessionServer = sessionState.get(currentPath);
+    if (sessionServer && Object.prototype.hasOwnProperty.call(config.servers, sessionServer)) {
+        return sessionServer;
+    }
+
+    const servers = findServersForPath(config, currentPath);
+    if (servers.length === 1) {
+        sessionState.set(currentPath, servers[0]);
+        return servers[0];
+    }
+
+    return undefined;
+}
+
+export function findMappingForPath(serverConfig: ServerConfig, localPath: string): Mapping | undefined {
+    const normalizedPath = normalizeLocalPath(localPath);
+    return serverConfig.mappings.find(m => normalizeLocalPath(m.local) === normalizedPath);
 }
 
 export function findServersForPath(config: WWConfig, localPath: string): string[] {
-    const normalizedPath = normalizePath(localPath);
+    const normalizedPath = normalizeLocalPath(localPath);
     const matches: string[] = [];
 
     for (const [name, serverConfig] of Object.entries(config.servers)) {
         for (const mapping of serverConfig.mappings) {
-            if (normalizePath(mapping.local) === normalizedPath) {
+            if (normalizeLocalPath(mapping.local) === normalizedPath) {
                 matches.push(name);
                 break;
             }
@@ -195,12 +267,9 @@ export async function selectOrCreateMapping(
 ): Promise<MappingSelectionResult | undefined> {
 
     const serverConfig = config.servers[serverAlias];
-    const normalizedPath = normalizePath(currentPath);
 
     // Find existing mapping
-    const existingMapping = serverConfig.mappings.find(
-        m => normalizePath(m.local) === normalizedPath
-    );
+    const existingMapping = findMappingForPath(serverConfig, currentPath);
 
     if (existingMapping) {
         return { config, mapping: existingMapping };

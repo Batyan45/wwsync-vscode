@@ -28,6 +28,19 @@ export function mergeExcludes(generalExcludes: string[] | undefined, mappingExcl
     return [...new Map(combined.map(e => [e, e])).values()];
 }
 
+/**
+ * Finds the configured alias for `name`, ignoring case: aliases taken from `wwsync://` URIs may come back
+ * lower-cased because VS Code lower-cases the URI authority.
+ */
+export function resolveServerAlias(config: WWConfig, name: string): string | undefined {
+    const servers = config.servers ?? {};
+    if (Object.prototype.hasOwnProperty.call(servers, name)) {
+        return name;
+    }
+    const lowerName = name.toLowerCase();
+    return Object.keys(servers).find(alias => alias.toLowerCase() === lowerName);
+}
+
 const CONFIG_PATH = path.join(os.homedir(), '.wwsync');
 
 export function loadConfig(): WWConfig {

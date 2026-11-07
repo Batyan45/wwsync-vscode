@@ -4,6 +4,15 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import { Mapping } from './config';
+import { shellQuotePath } from './run';
+
+/** Thrown when the user cancels an operation; callers should not report it as an error. */
+export class CancelledError extends Error {
+    constructor() {
+        super('Operation cancelled');
+        this.name = 'CancelledError';
+    }
+}
 
 function ensureTrailingSlash(p: string): string {
     return p.endsWith(path.sep) || p.endsWith('/') ? p : p + '/';
@@ -52,10 +61,7 @@ export async function runFullSync(
     dryRunArgs.push('--dry-run', src, dest);
 
     try {
-        if (token?.isCancellationRequested) {
-            return;
-        }
-        const dryRunOutput = await runRsyncCommandWithOutput(dryRunArgs, token, env);
+        const dryRunOutput = await runRsyncForOutput(outputChannel, dryRunArgs, token, env);
         const filesToDelete = parseDeletedFiles(dryRunOutput);
 
         if (filesToDelete.length > 0) {
@@ -83,18 +89,12 @@ export async function runFullSync(
             return;
         }
 
-        if (token?.isCancellationRequested) {
-            return;
-        }
-
         // Recreate remote directory (rm -rf contents, then mkdir -p)
         outputChannel.appendLine('Recreating remote directory...');
-        const recreateCmd = `rm -rf ${mapping.remote} && mkdir -p ${mapping.remote}`;
-        await runSshCommand(host, recreateCmd, token, env);
-
-        if (token?.isCancellationRequested) {
-            return;
-        }
+        // Quoted: an unquoted path with a space would make rm -rf delete two other paths.
+        const remotePath = shellQuotePath(mapping.remote);
+        const recreateCmd = `rm -rf ${remotePath} && mkdir -p ${remotePath}`;
+        await runSshCommand(outputChannel, host, recreateCmd, token, env);
 
         // Upload all content fresh (no --delete needed since dir is empty)
         outputChannel.appendLine('Uploading all files...');
@@ -103,8 +103,10 @@ export async function runFullSync(
 
         await runRsyncCommand(outputChannel, uploadArgs, 'Full sync', token, env);
         outputChannel.appendLine('Remote folder recreated successfully.');
-    } catch (error: any) {
-        outputChannel.appendLine(`Error: ${error.message}`);
+    } catch (error) {
+        if (!(error instanceof CancelledError)) {
+            outputChannel.appendLine(`Error: ${errorMessage(error)}`);
+        }
         throw error;
     }
 }
@@ -130,10 +132,13 @@ export async function downloadRemoteArtifacts(
     const dryRunArgs = buildRemoteDiffArgs(host, localRoot, mapping.remote, allExcludes);
     let dryRunOutput = '';
     try {
-        dryRunOutput = await runRsyncCommandWithOutput(dryRunArgs, token, env);
-    } catch (error: any) {
-        outputChannel.appendLine(`Error: ${error.message}`);
-        throw new Error('Failed to collect remote diff via rsync dry-run.');
+        dryRunOutput = await runRsyncForOutput(outputChannel, dryRunArgs, token, env);
+    } catch (error) {
+        if (error instanceof CancelledError) {
+            throw error;
+        }
+        outputChannel.appendLine(`Error: ${errorMessage(error)}`);
+        throw new Error(`Failed to collect remote changes: ${errorMessage(error)}`);
     }
 
     const { newFiles, changedFiles } = parseRsyncItemizedOutput(dryRunOutput);
@@ -277,69 +282,31 @@ export function parseDeletedFiles(output: string): string[] {
     return files;
 }
 
-async function runSshCommand(host: string, command: string, token?: vscode.CancellationToken, env?: NodeJS.ProcessEnv): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const proc = cp.spawn('ssh', [host, command], { env: { ...process.env, ...env } });
-
-        if (token) {
-            token.onCancellationRequested(() => {
-                proc.kill();
-                reject(new Error('Operation cancelled'));
-            });
-        }
-
-        let stderr = '';
-        proc.stderr.on('data', (data: Buffer) => {
-            stderr += data.toString();
-        });
-
-        proc.on('close', (code: number | null) => {
-            if (code === 0) {
-                resolve();
-            } else {
-                reject(new Error(stderr || `ssh exited with code ${code}`));
-            }
-        });
-
-        proc.on('error', (err: Error) => {
-            reject(err);
-        });
-    });
+async function runSshCommand(
+    outputChannel: vscode.OutputChannel,
+    host: string,
+    command: string,
+    token?: vscode.CancellationToken,
+    env?: NodeJS.ProcessEnv
+): Promise<void> {
+    const result = await runProcess('ssh', [host, command], { token, env, onStderr: text => outputChannel.append(text) });
+    if (result.code !== 0) {
+        throw new Error(failureReason(result, 'ssh'));
+    }
 }
 
-async function runRsyncCommandWithOutput(args: string[], token?: vscode.CancellationToken, env?: NodeJS.ProcessEnv): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const proc = cp.spawn('rsync', args, { env: { ...process.env, ...env } });
-
-        if (token) {
-            token.onCancellationRequested(() => {
-                proc.kill();
-                reject(new Error('Operation cancelled'));
-            });
-        }
-        let stdout = '';
-        let stderr = '';
-
-        proc.stdout.on('data', (data: Buffer) => {
-            stdout += data.toString();
-        });
-
-        proc.stderr.on('data', (data: Buffer) => {
-            stderr += data.toString();
-        });
-
-        proc.on('close', (code: number | null) => {
-            if (code === 0) {
-                resolve(stdout);
-            } else {
-                reject(new Error(stderr || `rsync exited with code ${code}`));
-            }
-        });
-
-        proc.on('error', (err: Error) => {
-            reject(err);
-        });
-    });
+/** Runs rsync and returns its stdout (for dry runs); stderr goes to the output channel. */
+async function runRsyncForOutput(
+    outputChannel: vscode.OutputChannel,
+    args: string[],
+    token?: vscode.CancellationToken,
+    env?: NodeJS.ProcessEnv
+): Promise<string> {
+    const result = await runProcess('rsync', args, { token, env, collectStdout: true, onStderr: text => outputChannel.append(text) });
+    if (result.code !== 0) {
+        throw new Error(failureReason(result, 'rsync'));
+    }
+    return result.stdout;
 }
 
 async function runRsyncCommand(
@@ -349,44 +316,111 @@ async function runRsyncCommand(
     token?: vscode.CancellationToken,
     env?: NodeJS.ProcessEnv
 ): Promise<void> {
+    outputChannel.appendLine(`Running: rsync ${args.join(' ')}`);
+    outputChannel.appendLine('');
+
+    const result = await runProcess('rsync', args, {
+        token,
+        env,
+        onStdout: text => outputChannel.append(text),
+        onStderr: text => outputChannel.append(text)
+    });
+
+    outputChannel.appendLine('');
+    if (result.code !== 0) {
+        outputChannel.appendLine(`✖ ${operationName} failed with code ${result.code}.`);
+        throw new Error(`${operationName} failed: ${failureReason(result, 'rsync')}`);
+    }
+    outputChannel.appendLine(`✔ ${operationName} completed successfully.`);
+    vscode.window.setStatusBarMessage(`${operationName} completed successfully.`, 5000);
+}
+
+interface ProcessResult {
+    code: number | null;
+    stdout: string;
+    /** The last few KB of stderr, for error messages. */
+    stderr: string;
+}
+
+/**
+ * Spawns a command and resolves when it exits. On cancellation the whole process tree is killed
+ * (rsync starts ssh as a child) and CancelledError is thrown only after the process has exited,
+ * so a following run never overlaps with a dying one.
+ */
+function runProcess(command: string, args: string[], options: {
+    token?: vscode.CancellationToken;
+    env?: NodeJS.ProcessEnv;
+    collectStdout?: boolean;
+    onStdout?: (text: string) => void;
+    onStderr?: (text: string) => void;
+}): Promise<ProcessResult> {
+    if (options.token?.isCancellationRequested) {
+        return Promise.reject(new CancelledError());
+    }
     return new Promise((resolve, reject) => {
-        outputChannel.appendLine(`Running: rsync ${args.join(' ')}`);
-        outputChannel.appendLine('');
-
-        const proc = cp.spawn('rsync', args, { env: { ...process.env, ...env } });
-
-        if (token) {
-            token.onCancellationRequested(() => {
-                outputChannel.appendLine('');
-                outputChannel.appendLine(`✖ ${operationName} cancelled by user.`);
-                proc.kill();
-            });
-        }
-
-        proc.stdout.on('data', (data: Buffer) => {
-            outputChannel.append(data.toString());
+        const proc = cp.spawn(command, args, {
+            env: { ...process.env, ...options.env },
+            // On POSIX give the process its own group, so cancelling can stop its children too.
+            detached: process.platform !== 'win32'
+        });
+        let stdout = '';
+        let stderr = '';
+        let cancelled = false;
+        const cancellation = options.token?.onCancellationRequested(() => {
+            cancelled = true;
+            killProcessTree(proc);
         });
 
-        proc.stderr.on('data', (data: Buffer) => {
-            outputChannel.append(data.toString());
+        proc.stdout.setEncoding('utf8');
+        proc.stderr.setEncoding('utf8');
+        proc.stdout.on('data', (text: string) => {
+            if (options.collectStdout) {
+                stdout += text;
+            }
+            options.onStdout?.(text);
+        });
+        proc.stderr.on('data', (text: string) => {
+            stderr = (stderr + text).slice(-8192);
+            options.onStderr?.(text);
         });
 
+        proc.on('error', (error: NodeJS.ErrnoException) => {
+            cancellation?.dispose();
+            reject(error.code === 'ENOENT' ? new Error(`'${command}' was not found. Install it or add it to PATH.`) : error);
+        });
         proc.on('close', (code: number | null) => {
-            outputChannel.appendLine('');
-            if (code === 0) {
-                outputChannel.appendLine(`✔ ${operationName} completed successfully.`);
-                vscode.window.setStatusBarMessage(`${operationName} completed successfully.`, 5000);
-                resolve();
+            cancellation?.dispose();
+            if (cancelled) {
+                reject(new CancelledError());
             } else {
-                outputChannel.appendLine(`✖ ${operationName} failed with code ${code}.`);
-                vscode.window.showErrorMessage(`${operationName} failed.`);
-                reject(new Error(`${operationName} failed with code ${code}`));
+                resolve({ code, stdout, stderr });
             }
         });
-
-        proc.on('error', (err: Error) => {
-            outputChannel.appendLine(`Error: ${err.message}`);
-            reject(err);
-        });
     });
+}
+
+function killProcessTree(proc: cp.ChildProcess): void {
+    if (proc.pid === undefined || proc.exitCode !== null || proc.signalCode !== null) {
+        return;
+    }
+    if (process.platform === 'win32') {
+        cp.spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F']).on('error', () => proc.kill());
+        return;
+    }
+    try {
+        process.kill(-proc.pid, 'SIGTERM'); // the whole process group: rsync and its ssh
+    } catch {
+        proc.kill();
+    }
+}
+
+/** The line that explains a failure (e.g. "ssh: Could not resolve hostname ..."), not rsync's generic summary. */
+function failureReason(result: ProcessResult, command: string): string {
+    const lines = result.stderr.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('**'));
+    const specific = lines.filter(line => !/^rsync error:|^rsync: connection unexpectedly closed/.test(line));
+    return specific.pop() ?? lines.pop() ?? `${command} exited with code ${result.code}`;
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }

@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { loadConfig, mergeExcludes } from './config';
-import { selectServer, selectOrCreateMapping } from './serverSelector';
-import { runSafeSync, runFullSync, downloadRemoteArtifacts } from './rsync';
+import { selectServer, selectOrCreateMapping, getCurrentWorkspaceFolder, normalizeLocalPath } from './serverSelector';
+import { runSafeSync, runFullSync, downloadRemoteArtifacts, CancelledError } from './rsync';
 import { runRemoteSession } from './run';
 import { SessionState } from './sessionState';
 import { WWSyncStatusBar } from './statusBar';
+import { REMOTE_SCHEME, RemoteConnectionManager, RemoteFileSystemProvider } from './remoteFs';
+import { RemoteExplorer } from './remoteExplorer';
 
 import { AskPassManager } from './askPass';
 
@@ -48,34 +49,48 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     context.subscriptions.push(safeSyncCmd, fullSyncCmd, runCmd, downloadArtifactsCmd, showMenuCmd, outputChannel);
+
+    // Remote Files panel: wwsync:// file system over a persistent SFTP session per server
+    const connections = new RemoteConnectionManager(sessionState, outputChannel);
+    const remoteFileSystem = new RemoteFileSystemProvider(connections);
+    context.subscriptions.push(
+        connections,
+        vscode.workspace.registerFileSystemProvider(REMOTE_SCHEME, remoteFileSystem, { isCaseSensitive: true }),
+        new RemoteExplorer(remoteFileSystem, connections, sessionState)
+    );
 }
 
-async function getCurrentWorkspaceFolder(): Promise<string | undefined> {
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders || workspaceFolders.length === 0) {
-        // Try to get folder from active editor
-        const activeEditor = vscode.window.activeTextEditor;
-        if (activeEditor) {
-            return path.dirname(activeEditor.document.uri.fsPath);
-        }
+/** Local folders with a sync or download in progress: two runs on one folder would collide. */
+const busyFolders = new Set<string>();
+
+function acquireFolder(folder: string): string | undefined {
+    const key = normalizeLocalPath(folder);
+    if (busyFolders.has(key)) {
+        vscode.window.showWarningMessage('WWSync: a sync or download is already running for this folder.');
         return undefined;
     }
+    busyFolders.add(key);
+    return key;
+}
 
-    if (workspaceFolders.length === 1) {
-        return workspaceFolders[0].uri.fsPath;
+function reportError(outputChannel: vscode.OutputChannel, operation: string, error: unknown) {
+    if (error instanceof CancelledError) {
+        outputChannel.appendLine(`✖ ${operation} cancelled.`);
+        return;
     }
-
-    // Multiple workspace folders - let user pick
-    const picked = await vscode.window.showQuickPick(
-        workspaceFolders.map(f => ({ label: f.name, description: f.uri.fsPath, folder: f })),
-        { placeHolder: 'Select workspace folder' }
-    );
-    return picked?.folder.uri.fsPath;
+    const message = error instanceof Error ? error.message : String(error);
+    vscode.window.showErrorMessage(`WWSync Error: ${message}`, 'Show Output').then(choice => {
+        if (choice) {
+            outputChannel.show(true);
+        }
+    });
 }
 
 async function executeSync(outputChannel: vscode.OutputChannel, fullSync: boolean) {
+    const operation = fullSync ? 'Full Sync' : 'Safe Sync';
     const askPassManager = new AskPassManager(sessionState);
     let env: NodeJS.ProcessEnv | undefined;
+    let busyFolder: string | undefined;
     try {
         const currentPath = await getCurrentWorkspaceFolder();
         if (!currentPath) {
@@ -118,6 +133,10 @@ async function executeSync(outputChannel: vscode.OutputChannel, fullSync: boolea
         config = mappingResult.config;
         const mapping = mappingResult.mapping;
 
+        busyFolder = acquireFolder(currentPath);
+        if (!busyFolder) {
+            return;
+        }
 
         // Prepare AskPass
         try {
@@ -136,7 +155,7 @@ async function executeSync(outputChannel: vscode.OutputChannel, fullSync: boolea
 
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
-            title: fullSync ? 'WWSync: Full Sync' : 'WWSync: Safe Sync',
+            title: `WWSync: ${operation}`,
             cancellable: true
         }, async (progress, token) => {
             if (fullSync) {
@@ -145,9 +164,12 @@ async function executeSync(outputChannel: vscode.OutputChannel, fullSync: boolea
                 await runSafeSync(outputChannel, serverConfig.host, effectiveMapping, token, env);
             }
         });
-    } catch (error: any) {
-        vscode.window.showErrorMessage(`WWSync Error: ${error.message}`);
+    } catch (error) {
+        reportError(outputChannel, operation, error);
     } finally {
+        if (busyFolder) {
+            busyFolders.delete(busyFolder);
+        }
         askPassManager.cleanup();
     }
 }
@@ -190,6 +212,7 @@ async function executeRun(outputChannel: vscode.OutputChannel) {
 async function executeDownloadArtifacts(outputChannel: vscode.OutputChannel) {
     const askPassManager = new AskPassManager(sessionState);
     let env: NodeJS.ProcessEnv | undefined;
+    let busyFolder: string | undefined;
     try {
         const currentPath = await getCurrentWorkspaceFolder();
         if (!currentPath) {
@@ -215,6 +238,11 @@ async function executeDownloadArtifacts(outputChannel: vscode.OutputChannel) {
 
         const mapping = mappingResult.mapping;
 
+        busyFolder = acquireFolder(currentPath);
+        if (!busyFolder) {
+            return;
+        }
+
         try {
             env = await askPassManager.prepare();
         } catch (err) {
@@ -236,9 +264,12 @@ async function executeDownloadArtifacts(outputChannel: vscode.OutputChannel) {
         }, async (_progress, token) => {
             await downloadRemoteArtifacts(outputChannel, serverConfig.host, serverAlias, effectiveMapping, token, env);
         });
-    } catch (error: any) {
-        vscode.window.showErrorMessage(`WWSync Error: ${error.message}`);
+    } catch (error) {
+        reportError(outputChannel, 'Download Artifacts', error);
     } finally {
+        if (busyFolder) {
+            busyFolders.delete(busyFolder);
+        }
         askPassManager.cleanup();
     }
 }

@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { SessionState } from './sessionState';
 import { loadConfig } from './config';
-import { findServersForPath } from './serverSelector';
+import { findServersForPath, getActiveWorkspaceFolder, getRememberedServer } from './serverSelector';
 
 export class WWSyncStatusBar {
     private statusBarItem: vscode.StatusBarItem;
@@ -42,59 +41,24 @@ export class WWSyncStatusBar {
         }
     }
 
-    private async getCurrentWorkspaceFolder(): Promise<string | undefined> {
-        // 1. Try active text editor
-        const activeEditor = vscode.window.activeTextEditor;
-        if (activeEditor) {
-            const workspaceFolder = vscode.workspace.getWorkspaceFolder(activeEditor.document.uri);
-            if (workspaceFolder) {
-                return workspaceFolder.uri.fsPath;
-            }
-        }
-
-        // 2. Try to get workspace folders if single root
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (workspaceFolders && workspaceFolders.length === 1) {
-            return workspaceFolders[0].uri.fsPath;
-        }
-
-        return undefined;
-    }
-
-    private async getServerForCurrentFolder(currentPath: string): Promise<string | undefined> {
-        // Check session state first
-        const sessionServer = this.sessionState.get(currentPath);
-        if (sessionServer) {
-            return sessionServer;
-        }
-
-        // If no session state, check if there's only one configured server for this path
-        const config = loadConfig();
-        const servers = findServersForPath(config, currentPath);
-
-        if (servers.length === 1) {
-            // Auto-select the only available server
-            const singleServer = servers[0];
-            this.sessionState.set(currentPath, singleServer);
-            return singleServer;
-        }
-
-        return undefined;
-    }
-
     public async update() {
         if (!vscode.workspace.getConfiguration('wwsync').get('showStatusBar', true)) {
             this.statusBarItem.hide();
             return;
         }
 
-        const currentPath = await this.getCurrentWorkspaceFolder();
+        const currentPath = getActiveWorkspaceFolder();
 
         if (!currentPath) {
             this.statusBarItem.text = '$(sync) WWSync';
             this.statusBarItem.tooltip = 'WWSync: No active workspace folder';
         } else {
-            const serverName = await this.getServerForCurrentFolder(currentPath);
+            let serverName: string | undefined;
+            try {
+                serverName = getRememberedServer(loadConfig(), currentPath, this.sessionState);
+            } catch {
+                serverName = undefined; // ~/.wwsync is invalid (e.g. mid-edit); the commands report it
+            }
             if (serverName) {
                 this.statusBarItem.text = `$(sync) WWSync: ${serverName}`;
                 this.statusBarItem.tooltip = `WWSync: Connected to ${serverName}`;
@@ -108,7 +72,7 @@ export class WWSyncStatusBar {
     }
 
     public async showMenu() {
-        let currentPath = await this.getCurrentWorkspaceFolder();
+        let currentPath = getActiveWorkspaceFolder();
 
         if (!currentPath) {
             // If multiple workspaces, let user pick one to operate on
@@ -143,7 +107,8 @@ export class WWSyncStatusBar {
             { label: '$(cloud-upload) Safe Sync', description: 'wwsync.safeSync' },
             { label: '$(sync) Full Sync', description: 'wwsync.fullSync' },
             { label: '$(cloud-download) Download Artifacts', description: 'wwsync.downloadArtifacts' },
-            { label: '$(terminal) Run Remote Session', description: 'wwsync.run' }
+            { label: '$(terminal) Run Remote Session', description: 'wwsync.run' },
+            { label: '$(remote-explorer) Browse Remote Files', description: 'wwsync.remoteExplorer.open' }
         ];
 
         const separator: vscode.QuickPickItem = { label: 'Select Default Server', kind: vscode.QuickPickItemKind.Separator };

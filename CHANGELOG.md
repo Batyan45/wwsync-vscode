@@ -2,6 +2,32 @@
 
 All notable changes to the "WWSync" extension will be documented in this file.
 
+## [1.3.0] - 2026-11-07
+
+### Added
+- **Remote Files panel**: new WWSync icon in the Activity Bar. **Open Remote Folder** opens the same remote folder that Safe Sync uses for the current folder (the status bar server and its mapping's remote path, never the home folder); showing the panel alone does not connect. While connected, it follows server changes made in the status bar.
+- Remote files open in regular VS Code editors through the new `wwsync://<server>/<path>` file system and are saved back to the server with `Ctrl+S`. Remote tabs are restored after a restart.
+- File operations in the panel: New File/Folder, Rename (`F2`), Delete (`Delete`, multi-select), Copy Path / Copy Relative Path, Open in Remote Terminal, Go to Parent Folder / Go to This Folder / Go to Project Folder, Switch Server (among the servers mapped to the folder).
+- **Compare with Local**: diff of a remote file and its copy in the local project, from the panel or from a remote editor tab.
+- `WWSync: Browse Remote Files` command, also available in the status bar menu.
+- Uses one persistent SFTP session per server via the system `ssh`, with the same password/passphrase prompts and session cache as sync. Does not need `rsync`.
+
+### Fixed
+- Reopening Browse Remote Files returns to the current workspace's configured remote folder, including after navigating to a parent folder or editing the mapping.
+- Local mapping selection and Compare with Local preserve path case on Linux/WSL; differently cased project folders no longer share mappings or the sync busy guard.
+- Full Sync quotes the remote path in `rm -rf` / `mkdir -p` (a leading `~/` still expands), so a path with spaces can no longer make it delete other folders.
+- Cancelling a sync or download is no longer reported as an error, and it now also stops the `ssh` process started by rsync before the operation ends.
+- A second sync or download for the same folder no longer starts while one is still running.
+- Error notifications show the actual cause (for example `ssh: Could not resolve hostname ...`) instead of only "failed with code 255", with a **Show Output** button. A failure shows one notification instead of two.
+- A clear message when `rsync` is not installed.
+- A password prompt left open by a cancelled operation is closed.
+- The VSIX package no longer includes the bundled Python CLI (`wwsync/` folder).
+
+## [1.2.0] - 2026-07-07
+
+### Changed
+- New extension icon.
+
 ## [1.1.0] - 2026-04-08
 
 ### Added

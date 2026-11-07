@@ -9,6 +9,8 @@ export class AskPassManager {
     private server: http.Server | undefined;
     private scriptPath: string | undefined;
     private clientScriptPath: string | undefined;
+    /** Closes a password prompt that is still open when the operation is over (e.g. cancelled). */
+    private readonly prompts = new vscode.CancellationTokenSource();
 
     constructor(private sessionState: SessionState) { }
 
@@ -33,7 +35,7 @@ export class AskPassManager {
                         prompt: promptText,
                         password: true,
                         ignoreFocusOut: true
-                    });
+                    }, this.prompts.token);
 
                     if (password !== undefined) {
                         this.sessionState.setPassword(promptText, password);
@@ -106,6 +108,8 @@ req.end();
     }
 
     public cleanup() {
+        this.prompts.cancel();
+        this.prompts.dispose();
         if (this.server) {
             this.server.close();
             this.server = undefined;

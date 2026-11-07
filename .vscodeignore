@@ -2,9 +2,11 @@
 .github/**
 .gitignore
 src/**
+test/**
 tsconfig.json
 package-lock.json
 *.vsix
 .wwsync
 wwsync*
+wwsync/**
 AGENTS.md
